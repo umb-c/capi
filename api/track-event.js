@@ -9,7 +9,7 @@ export default async function handler(req, res) {
 
   try {
     const payload = req.body;
-    const { event_id, fbp, external_id } = payload;
+    const { event_id, fbp, fbc, external_id } = payload;
 
     if (!payload?.data?.length) {
       return res.status(400).json({ error: 'Payload mancante o vuoto' });
@@ -21,6 +21,7 @@ export default async function handler(req, res) {
       payload.data[0].event_id = event_id;
       payload.data[0].user_data.client_ip_address = ip;
       payload.data[0].user_data.fbp = fbp;
+      payload.data[0].user_data.fbc = fbc; // ✅ Aggiunto fbc
       payload.data[0].user_data.external_id = external_id;
     }
 
