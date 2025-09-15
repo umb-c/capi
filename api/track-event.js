@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS settings
   res.setHeader('Access-Control-Allow-Origin', 'https://lamape.eu');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,19 +11,22 @@ export default async function handler(req, res) {
   try {
     const { event_id, fbp, fbc, external_id } = req.body;
 
+    // IP e User Agent per Meta CAPI
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const userAgent = req.headers['user-agent'] || '';
 
+    // Costruzione payload per Meta
     const payload = {
       data: [
         {
-          event_name: "PageView", // puoi cambiarlo se vuoi
+          event_name: "PageView", // Puoi cambiare in "Purchase", "AddToCart", ecc.
           event_time: Math.floor(Date.now() / 1000),
           event_id: event_id,
           event_source_url: req.headers.referer || 'https://lamape.eu',
           action_source: "website",
           user_data: {
             client_ip_address: ip,
-            client_user_agent: req.headers['user-agent'],
+            client_user_agent: userAgent,
             fbp: fbp,
             fbc: fbc,
             external_id: external_id
@@ -31,9 +35,9 @@ export default async function handler(req, res) {
       ]
     };
 
-    console.log('✅ Payload inviato a Meta:', JSON.stringify(payload, null, 2));
+    console.log("✅ Payload inviato a Meta:", JSON.stringify(payload, null, 2));
 
-    const token = 'EAAV26VsK3EQBPa0Drvf1ejfLBluDKhpo9jntTW2nQdTWASp0cZBunxjlJpCp6GGZCnywTFB8KsZCRBcudbC4YtnXiccWirKZA3voHEblZA7rfERSTjg9t6ETNtGO1COaL1fhnxR5Wu9jfFdD3AKZCfTxwZB2i6OhSOIbBH163TYKCfrrbRGsyJDmHIrINxzw3zdzwKXBAZDZD';
+    const token = process.env.METAL_ACCESS_TOKEN;
     const pixelId = '302534569613426';
 
     const response = await fetch(
@@ -48,13 +52,13 @@ export default async function handler(req, res) {
     const result = await response.json();
 
     if (!response.ok) {
-      console.error('❌ Errore da Meta:', result);
+      console.error("❌ Errore da Meta:", result);
       return res.status(500).json({ error: 'Errore da Meta', details: result });
     }
 
     res.status(200).json(result);
   } catch (error) {
-    console.error('❌ Errore interno:', error.message);
+    console.error("❌ Errore interno:", error.message);
     res.status(500).json({ error: 'Errore interno', details: error.message });
   }
 }
