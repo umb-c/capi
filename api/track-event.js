@@ -1,69 +1,65 @@
-export default async function handler(req, res) {
-  // CORS settings
-  res.setHeader('Access-Control-Allow-Origin', 'https://lamape.eu');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+{%- comment -%}
+  Script avanzato per generare fbc, fbp, external_id e inviarli con event_id per deduplicazione Meta
+{%- endcomment -%}
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST ammesso' });
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const urlParams = new URLSearchParams(window.location.search);
+  const fbclid = urlParams.get('fbclid');
+  const debug = urlParams.get('debug_capi') === 'true';
 
-  try {
-    const { event_id, fbp, fbc, external_id } = req.body;
+  // 🔍 Funzione per leggere i cookie
+  const getCookie = name => {
+    const match = document.cookie.match(new RegExp('(^| )' + name + '=([^;]+)'));
+    return match ? match[2] : '';
+  };
 
-    // ✅ Lettura variabile d'ambiente corretta
-    const token = process.env.META_ACCESS_TOKEN;
-    if (!token) {
-      console.error("❌ Token Meta non trovato");
-      return res.status(500).json({ error: "Token Meta mancante" });
-    }
-
-    // IP e User Agent
-    const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-    const userAgent = req.headers['user-agent'] || '';
-
-    // Costruzione payload
-    const payload = {
-      data: [
-        {
-          event_name: "PageView",
-          event_time: Math.floor(Date.now() / 1000),
-          event_id: event_id,
-          event_source_url: req.headers.referer || 'https://lamape.eu',
-          action_source: "website",
-          user_data: {
-            client_ip_address: ip,
-            client_user_agent: userAgent,
-            fbp: fbp,
-            fbc: fbc,
-            external_id: external_id
-          }
-        }
-      ]
-    };
-
-    console.log("📦 Payload pronto:", JSON.stringify(payload, null, 2));
-
-    const pixelId = '302534569613426';
-    const url = `https://graph.facebook.com/v18.0/${pixelId}/events?access_token=${token}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      console.error("❌ Errore da Meta:", JSON.stringify(result, null, 2));
-      return res.status(500).json({ error: "Errore da Meta", details: result });
-    }
-
-    console.log("✅ Evento inviato correttamente:", result);
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("❌ Errore interno:", error.message);
-    res.status(500).json({ error: "Errore interno", details: error.message });
+  // ✅ Genera _fbc se fbclid è presente e il cookie non esiste
+  if (fbclid && !getCookie('_fbc')) {
+    const fbcValue = 'fb.1.' + Date.now() + '.' + fbclid;
+    document.cookie = '_fbc=' + fbcValue + '; path=/; domain=' + window.location.hostname + ';';
+    localStorage.setItem('fbclid', fbclid); // persistente
   }
-}
+
+  // ✅ Genera external_id persistente
+  let externalId = localStorage.getItem('external_id');
+  if (!externalId) {
+    externalId = 'guest-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('external_id', externalId);
+  }
+
+  // ✅ Leggi i cookie
+  const fbp = getCookie('_fbp') || '';
+  const fbc = getCookie('_fbc') || '';
+  const eventId = 'ev-' + Date.now();
+
+  // ✅ Costruisci il payload
+  const payload = {
+    event_name: 'Purchase', // puoi cambiarlo dinamicamente
+    event_id: eventId,
+    fbp,
+    fbc,
+    external_id: externalId,
+    value: 49.99, // dinamico
+    currency: 'EUR',
+    content_ids: ['SKU123'], // dinamico
+    content_type: 'product',
+    email: '', // opzionale
+    phone: ''  // opzionale
+  };
+
+  if (debug) console.log('📦 Payload inviato a server:', payload);
+
+  // ✅ Invia al server
+  fetch('https://capi-snowy.vercel.app/api/track-event', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (debug) console.log('✅ Risposta Meta:', data);
+    })
+    .catch(err => console.error('❌ Errore invio evento:', err));
+});
+</script>
