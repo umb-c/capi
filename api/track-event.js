@@ -11,8 +11,8 @@ export default async function handler(req, res) {
   try {
     const { event_id, fbp, fbc, external_id } = req.body;
 
-    // Verifica token
-    const token = process.env.METAL_ACCESS_TOKEN;
+    // ✅ Lettura variabile d'ambiente corretta
+    const token = process.env.META_ACCESS_TOKEN;
     if (!token) {
       console.error("❌ Token Meta non trovato");
       return res.status(500).json({ error: "Token Meta mancante" });
@@ -67,4 +67,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: "Errore interno", details: error.message });
   }
 }
-// trigger redeploy
