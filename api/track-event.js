@@ -2,13 +2,19 @@ import crypto from 'crypto';
 
 export default async function handler(req, res) {
   // ✅ CORS settings
-  res.setHeader('Access-Control-Allow-Origin', 'https://lamape.eu');
+  const origin = 'https://lamape.eu';
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST ammesso' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end(); // ✅ Risposta preflight
+  }
+
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Solo POST ammesso' });
+  }
 
   try {
     // ✅ Lettura variabili dal body
@@ -31,14 +37,14 @@ export default async function handler(req, res) {
     const pixelId = process.env.META_PIXEL_ID;
 
     if (!token || !pixelId) {
-      console.error('❌ Token o Pixel ID mancanti');
+      console.error('❌ Token o Pixel ID mancanti:', { token, pixelId });
       return res.status(500).json({ error: 'Configurazione Meta incompleta' });
     }
 
     // ✅ IP e User Agent
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
-    const sourceUrl = req.headers.referer || 'https://lamape.eu';
+    const sourceUrl = req.headers.referer || origin;
 
     // ✅ Funzione di hashing SHA256
     const hash = value =>
