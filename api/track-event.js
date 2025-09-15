@@ -67,3 +67,4 @@ export default async function handler(req, res) {
     res.status(500).json({ error: "Errore interno", details: error.message });
   }
 }
+// trigger redeploy
