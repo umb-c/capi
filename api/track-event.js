@@ -11,15 +11,22 @@ export default async function handler(req, res) {
   try {
     const { event_id, fbp, fbc, external_id } = req.body;
 
-    // IP e User Agent per Meta CAPI
+    // Verifica token
+    const token = process.env.METAL_ACCESS_TOKEN;
+    if (!token) {
+      console.error("❌ Token Meta non trovato");
+      return res.status(500).json({ error: "Token Meta mancante" });
+    }
+
+    // IP e User Agent
     const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     const userAgent = req.headers['user-agent'] || '';
 
-    // Costruzione payload per Meta
+    // Costruzione payload
     const payload = {
       data: [
         {
-          event_name: "PageView", // Puoi cambiare in "Purchase", "AddToCart", ecc.
+          event_name: "PageView",
           event_time: Math.floor(Date.now() / 1000),
           event_id: event_id,
           event_source_url: req.headers.referer || 'https://lamape.eu',
@@ -35,30 +42,28 @@ export default async function handler(req, res) {
       ]
     };
 
-    console.log("✅ Payload inviato a Meta:", JSON.stringify(payload, null, 2));
+    console.log("📦 Payload pronto:", JSON.stringify(payload, null, 2));
 
-    const token = process.env.METAL_ACCESS_TOKEN;
     const pixelId = '302534569613426';
+    const url = `https://graph.facebook.com/v18.0/${pixelId}/events?access_token=${token}`;
 
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/${pixelId}/events?access_token=${token}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }
-    );
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
     const result = await response.json();
 
     if (!response.ok) {
-      console.error("❌ Errore da Meta:", result);
-      return res.status(500).json({ error: 'Errore da Meta', details: result });
+      console.error("❌ Errore da Meta:", JSON.stringify(result, null, 2));
+      return res.status(500).json({ error: "Errore da Meta", details: result });
     }
 
+    console.log("✅ Evento inviato correttamente:", result);
     res.status(200).json(result);
   } catch (error) {
     console.error("❌ Errore interno:", error.message);
-    res.status(500).json({ error: 'Errore interno', details: error.message });
+    res.status(500).json({ error: "Errore interno", details: error.message });
   }
 }
