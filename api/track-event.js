@@ -13,26 +13,9 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Solo POST ammesso' });
 
   try {
-    // ✅ Lettura variabili dal body
-    const {
-      event_name = 'PageView',
-      event_id,
-      fbp,
-      fbc,
-      external_id,
-      value,
-      currency,
-      content_ids,
-      content_type,
-      email,
-      phone
-    } = req.body;
-
     // ✅ Lettura variabili d'ambiente
     const token = process.env.META_ACCESS_TOKEN;
     const pixelId = process.env.META_PIXEL_ID;
-
-    console.log('🔍 ENV CHECK:', { token, pixelId });
 
     if (!token || !pixelId) {
       console.error('❌ Token o Pixel ID mancanti:', { token, pixelId });
@@ -50,14 +33,32 @@ export default async function handler(req, res) {
         ? crypto.createHash('sha256').update(value.trim().toLowerCase()).digest('hex')
         : undefined;
 
-    // ✅ Costruzione payload
+    // ✅ Riconoscimento webhook Shopify
+    const isShopifyWebhook = req.headers['x-shopify-topic'] === 'orders/create';
+    const order = isShopifyWebhook ? req.body : null;
+
+    // ✅ Lettura variabili dal body (client-side o webhook)
+    const {
+      event_name = isShopifyWebhook ? 'Purchase' : 'PageView',
+      event_id = isShopifyWebhook ? `purchase-${order?.id}` : undefined,
+      fbp,
+      fbc,
+      external_id,
+      value = isShopifyWebhook ? parseFloat(order?.total_price) : 0,
+      currency = isShopifyWebhook ? order?.currency : 'EUR',
+      content_ids = isShopifyWebhook ? order?.line_items?.map(item => item.product_id) : [],
+      content_type = 'product',
+      email = isShopifyWebhook ? order?.email : req.body.email,
+      phone = isShopifyWebhook ? order?.phone : req.body.phone
+    } = req.body;
+
     const payload = {
       data: [
         {
           event_name,
           event_time: Math.floor(Date.now() / 1000),
           event_id,
-          event_source_url: sourceUrl,
+          event_source_url: isShopifyWebhook ? order?.order_status_url : sourceUrl,
           action_source: 'website',
           user_data: {
             client_ip_address: ip,
@@ -66,19 +67,21 @@ export default async function handler(req, res) {
             fbc,
             external_id,
             em: hash(email),
-            ph: hash(phone)
+            ph: hash(phone),
+            fn: hash(order?.customer?.first_name),
+            ln: hash(order?.customer?.last_name),
+            ct: hash(order?.billing_address?.city),
+            zip: hash(order?.billing_address?.zip)
           },
           custom_data: {
-            value: value ?? 0,
-            currency: currency ?? 'EUR',
+            value,
+            currency,
             content_ids: Array.isArray(content_ids) ? content_ids : [],
-            content_type: content_type ?? 'product'
+            content_type
           }
         }
       ]
     };
-
-    console.log('📦 Payload pronto:', JSON.stringify(payload, null, 2));
 
     // ✅ Invio a Meta Conversion API
     const url = `https://graph.facebook.com/v18.0/${pixelId}/events?access_token=${token}`;
